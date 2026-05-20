@@ -7,9 +7,9 @@ import paho.mqtt.client as mqtt
 import os
 from dotenv import load_dotenv
 
-# =========================
-# LOAD ENV VARIABLES
-# =========================
+# =====================================
+# LOAD ENVIRONMENT VARIABLES
+# =====================================
 
 load_dotenv()
 
@@ -19,9 +19,9 @@ USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 TOPIC = os.getenv("TOPIC")
 
-# =========================
+# =====================================
 # FASTAPI APP
-# =========================
+# =====================================
 
 app = FastAPI()
 
@@ -33,9 +33,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =========================
+# =====================================
 # SQLITE DATABASE
-# =========================
+# =====================================
 
 conn = sqlite3.connect("transport.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -54,20 +54,27 @@ CREATE TABLE IF NOT EXISTS telemetry (
 
 conn.commit()
 
-# =========================
-# MQTT CALLBACKS
-# =========================
+# =====================================
+# MQTT CALLBACK FUNCTIONS
+# =====================================
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected to MQTT Broker")
+    print("MQTT CONNECTED")
+    print("RC:", rc)
+
     client.subscribe(TOPIC)
+
     print(f"Subscribed to {TOPIC}")
 
 def on_message(client, userdata, msg):
+
     try:
+
+        print("MESSAGE RECEIVED")
+
         payload = json.loads(msg.payload.decode())
 
-        print("Received:", payload)
+        print(payload)
 
         cursor.execute("""
         INSERT INTO telemetry (
@@ -90,14 +97,18 @@ def on_message(client, userdata, msg):
 
         conn.commit()
 
+        print("Inserted into database")
+
     except Exception as e:
-        print("Error processing message:", e)
+        print("ERROR:", e)
 
-# =========================
+# =====================================
 # MQTT CLIENT
-# =========================
+# =====================================
 
-client = mqtt.Client()
+client = mqtt.Client(
+    mqtt.CallbackAPIVersion.VERSION1
+)
 
 client.username_pw_set(USERNAME, PASSWORD)
 
@@ -106,15 +117,15 @@ client.tls_set()
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect(BROKER, MQTT_PORT)
+client.connect(BROKER, MQTT_PORT, 60)
 
 client.loop_start()
 
 print("MQTT Subscriber Running")
 
-# =========================
+# =====================================
 # API ROUTES
-# =========================
+# =====================================
 
 @app.get("/")
 def home():
@@ -141,6 +152,7 @@ def get_telemetry():
     telemetry = []
 
     for row in rows:
+
         telemetry.append({
             "bus_id": row[0],
             "timestamp": row[1],
