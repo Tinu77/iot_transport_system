@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import pandas as pd
 import json
 import time
@@ -13,14 +17,13 @@ df = pd.read_csv("data/location_log.csv")
 # ==================================
 # HIVEMQ CLOUD SETTINGS
 # ==================================
+import os
 
-BROKER = "5bedf517a53645328ea3e3a30e67f571.s1.eu.hivemq.cloud"
-PORT = 8883
-TOPIC = "transport/bus"
-
-USERNAME = "hivemq.webclient.1778944958129"
-PASSWORD = "nvPLB<t,$#16Rre9Oa5E"
-
+BROKER = os.getenv("BROKER")
+PORT = int(os.getenv("PORT"))
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
+TOPIC = os.getenv("TOPIC")
 # ==================================
 # CREATE MQTT CLIENT
 # ==================================

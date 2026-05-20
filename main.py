@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 import sqlite3
 import json
@@ -38,12 +42,15 @@ conn.commit()
 # HIVEMQ SETTINGS
 # =========================
 
-BROKER = "5bedf517a53645328ea3e3a30e67f571.s1.eu.hivemq.cloud"
-PORT = 8883
-TOPIC = "transport/bus"
+import os
 
-USERNAME = "hivemq.webclient.1778946132206"
-PASSWORD = "hn9<0JA1@CSG?Xpxd#7e"
+BROKER = os.getenv("BROKER")
+PORT = int(os.getenv("PORT"))
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
+TOPIC = os.getenv("TOPIC")
+
+
 
 # =========================
 # MQTT CALLBACK
@@ -80,7 +87,7 @@ def on_message(client, userdata, msg):
 
     conn.commit()
 
-# =========================
+# =========================  
 # MQTT CLIENT
 # =========================
 
