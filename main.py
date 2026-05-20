@@ -1,4 +1,4 @@
-```python
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
@@ -94,7 +94,7 @@ def on_message(client, userdata, msg):
         print("Error processing message:", e)
 
 # =========================
-# START MQTT CLIENT
+# MQTT CLIENT
 # =========================
 
 client = mqtt.Client()
@@ -151,4 +151,3 @@ def get_telemetry():
         })
 
     return telemetry
-```
