@@ -20,7 +20,7 @@ df = pd.read_csv("data/location_log.csv")
 import os
 
 BROKER = os.getenv("BROKER")
-PORT = int(os.getenv("PORT"))
+MQTT_PORT = int(os.getenv("MQTT_PORT"))
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 TOPIC = os.getenv("TOPIC")
@@ -38,7 +38,7 @@ client.tls_set(tls_version=ssl.PROTOCOL_TLS)
 # CONNECT TO BROKER
 # ==================================
 
-client.connect(BROKER, PORT)
+client.connect(BROKER, MQTT_PORT)
 
 print("Connected to HiveMQ Cloud")
 
