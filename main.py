@@ -1,12 +1,23 @@
+```python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import sqlite3
+import json
+import paho.mqtt.client as mqtt
+import os
 from dotenv import load_dotenv
+
+# =========================
+# LOAD ENV VARIABLES
+# =========================
 
 load_dotenv()
 
-from fastapi import FastAPI
-import sqlite3
-import json
-import ssl
-import paho.mqtt.client as mqtt
+BROKER = os.getenv("BROKER")
+MQTT_PORT = int(os.getenv("MQTT_PORT"))
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
+TOPIC = os.getenv("TOPIC")
 
 # =========================
 # FASTAPI APP
@@ -14,21 +25,26 @@ import paho.mqtt.client as mqtt
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # =========================
-# DATABASE SETUP
+# SQLITE DATABASE
 # =========================
 
 conn = sqlite3.connect("transport.db", check_same_thread=False)
-
 cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS telemetry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT,
-    trip_id TEXT,
     bus_id TEXT,
-    stop_id TEXT,
+    timestamp TEXT,
     lat REAL,
     lon REAL,
     speed_kmh REAL,
@@ -39,69 +55,58 @@ CREATE TABLE IF NOT EXISTS telemetry (
 conn.commit()
 
 # =========================
-# HIVEMQ SETTINGS
+# MQTT CALLBACKS
 # =========================
 
-import os
-
-BROKER = os.getenv("BROKER")
-MQTT_PORT = int(os.getenv("MQTT_PORT"))
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
-TOPIC = os.getenv("TOPIC")
-
-
-
-# =========================
-# MQTT CALLBACK
-# =========================
+def on_connect(client, userdata, flags, rc):
+    print("Connected to MQTT Broker")
+    client.subscribe(TOPIC)
+    print(f"Subscribed to {TOPIC}")
 
 def on_message(client, userdata, msg):
+    try:
+        payload = json.loads(msg.payload.decode())
 
-    payload = json.loads(msg.payload.decode())
+        print("Received:", payload)
 
-    print("Received:", payload)
+        cursor.execute("""
+        INSERT INTO telemetry (
+            bus_id,
+            timestamp,
+            lat,
+            lon,
+            speed_kmh,
+            occupancy
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            payload.get("bus_id"),
+            payload.get("timestamp"),
+            payload.get("lat"),
+            payload.get("lon"),
+            payload.get("speed_kmh"),
+            payload.get("occupancy")
+        ))
 
-    cursor.execute("""
-    INSERT INTO telemetry (
-        timestamp,
-        trip_id,
-        bus_id,
-        stop_id,
-        lat,
-        lon,
-        speed_kmh,
-        occupancy
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        payload["timestamp"],
-        payload["trip_id"],
-        payload["bus_id"],
-        payload["stop_id"],
-        payload["lat"],
-        payload["lon"],
-        payload["speed_kmh"],
-        payload["occupancy"]
-    ))
+        conn.commit()
 
-    conn.commit()
+    except Exception as e:
+        print("Error processing message:", e)
 
-# =========================  
-# MQTT CLIENT
+# =========================
+# START MQTT CLIENT
 # =========================
 
 client = mqtt.Client()
 
 client.username_pw_set(USERNAME, PASSWORD)
 
-client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+client.tls_set()
 
+client.on_connect = on_connect
 client.on_message = on_message
 
 client.connect(BROKER, MQTT_PORT)
-
-client.subscribe(TOPIC)
 
 client.loop_start()
 
@@ -119,26 +124,31 @@ def home():
 def get_telemetry():
 
     cursor.execute("""
-    SELECT * FROM telemetry
+    SELECT
+        bus_id,
+        timestamp,
+        lat,
+        lon,
+        speed_kmh,
+        occupancy
+    FROM telemetry
     ORDER BY id DESC
     LIMIT 100
     """)
 
     rows = cursor.fetchall()
 
-    results = []
+    telemetry = []
 
     for row in rows:
-        results.append({
-            "id": row[0],
+        telemetry.append({
+            "bus_id": row[0],
             "timestamp": row[1],
-            "trip_id": row[2],
-            "bus_id": row[3],
-            "stop_id": row[4],
-            "lat": row[5],
-            "lon": row[6],
-            "speed_kmh": row[7],
-            "occupancy": row[8]
+            "lat": row[2],
+            "lon": row[3],
+            "speed_kmh": row[4],
+            "occupancy": row[5]
         })
 
-    return results
+    return telemetry
+```

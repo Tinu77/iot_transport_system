@@ -40,6 +40,7 @@ client.tls_set(tls_version=ssl.PROTOCOL_TLS)
 
 client.connect(BROKER, MQTT_PORT)
 
+
 print("Connected to HiveMQ Cloud")
 
 # ==================================

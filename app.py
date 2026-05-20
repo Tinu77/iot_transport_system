@@ -7,6 +7,7 @@ import time
 # PAGE CONFIGURATION
 # =========================================
 
+
 st.set_page_config(
     page_title="IoT Transport Dashboard",
     layout="wide"
