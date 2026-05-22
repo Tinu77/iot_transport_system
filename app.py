@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # Auto refresh every 5 seconds
-st_autorefresh(interval=5000, key="refresh")
+
 
 # ---------------- TITLE ----------------
 st.title("🚌 IoT Public Transport Monitoring System")
