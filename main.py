@@ -1,165 +1,115 @@
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import sqlite3
 import json
+from fastapi import FastAPI
 import paho.mqtt.client as mqtt
-import os
-from dotenv import load_dotenv
+import sqlite3
+import ssl
 
-# =====================================
-# LOAD ENVIRONMENT VARIABLES
-# =====================================
-
-load_dotenv()
-
-BROKER = os.getenv("BROKER")
-MQTT_PORT = int(os.getenv("MQTT_PORT"))
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
-TOPIC = os.getenv("TOPIC")
-
-# =====================================
-# FASTAPI APP
-# =====================================
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# =========================
+# MQTT CONFIGURATION
+# =========================
 
-# =====================================
-# SQLITE DATABASE
-# =====================================
+BROKER = "5bedf517a53645328ea3e3a30e67f571.s1.eu.hivemq.cloud"
+PORT = 8883
+USERNAME = "ADMIN"
+PASSWORD = "AdminBus123"
+TOPIC = "transport/bus"
 
-conn = sqlite3.connect("transport.db", check_same_thread=False)
-cursor = conn.cursor()
+# Store telemetry
+telemetry_data = []
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS telemetry (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    bus_id TEXT,
-    timestamp TEXT,
-    lat REAL,
-    lon REAL,
-    speed_kmh REAL,
-    occupancy INTEGER
-)
-""")
-
-conn.commit()
-
-# =====================================
-# MQTT CALLBACK FUNCTIONS
-# =====================================
+# =========================
+# MQTT CALLBACKS
+# =========================
 
 def on_connect(client, userdata, flags, rc):
-    print("MQTT CONNECTED")
-    print("RC:", rc)
+    print("\nMQTT Connected with result code:", rc)
 
-    client.subscribe(TOPIC)
+    if rc == 0:
+        print("Successfully connected to HiveMQ Cloud")
+        client.subscribe(TOPIC)
+        print("Subscribed to topic:", TOPIC)
 
-    print(f"Subscribed to {TOPIC}")
+    elif rc == 5:
+        print("Authentication failed - check username/password")
+
+    else:
+        print("Connection failed")
+
 
 def on_message(client, userdata, msg):
+    global telemetry_data
 
     try:
+        payload = msg.payload.decode()
 
-        print("MESSAGE RECEIVED")
-
-        payload = json.loads(msg.payload.decode())
-
+        print("\nReceived MQTT Message:")
         print(payload)
 
-        cursor.execute("""
-        INSERT INTO telemetry (
-            bus_id,
-            timestamp,
-            lat,
-            lon,
-            speed_kmh,
-            occupancy
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            payload.get("bus_id"),
-            payload.get("timestamp"),
-            payload.get("lat"),
-            payload.get("lon"),
-            payload.get("speed_kmh"),
-            payload.get("occupancy")
-        ))
+        data = json.loads(payload)
 
-        conn.commit()
+        telemetry_data.append(data)
 
-        print("Inserted into database")
+        # Keep latest 100 records only
+        telemetry_data = telemetry_data[-100:]
 
     except Exception as e:
-        print("ERROR:", e)
+        print("Error processing message:", e)
 
-# =====================================
-# MQTT CLIENT
-# =====================================
 
-client = mqtt.Client(
-    mqtt.CallbackAPIVersion.VERSION1
-)
+# =========================
+# MQTT CLIENT SETUP
+# =========================
+
+client = mqtt.Client()
 
 client.username_pw_set(USERNAME, PASSWORD)
 
+# Required for HiveMQ Cloud SSL
 client.tls_set()
 
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect(BROKER, MQTT_PORT, 60)
+print("Connecting to HiveMQ Cloud...")
+
+client.connect(BROKER, PORT, 60)
 
 client.loop_start()
 
-print("MQTT Subscriber Running")
-
-# =====================================
-# API ROUTES
-# =====================================
+# =========================
+# FASTAPI ROUTES
+# =========================
 
 @app.get("/")
 def home():
-    return {"message": "IoT Transport API Running"}
+    return {
+        "message": "IoT Transport API Running"
+    }
+
 
 @app.get("/telemetry")
 def get_telemetry():
 
-    cursor.execute("""
-    SELECT
-        bus_id,
-        timestamp,
-        lat,
-        lon,
-        speed_kmh,
-        occupancy
-    FROM telemetry
-    ORDER BY id DESC
-    LIMIT 100
-    """)
+    try:
+        conn = sqlite3.connect("transport.db")
+        conn.row_factory = sqlite3.Row
 
-    rows = cursor.fetchall()
+        cursor = conn.cursor()
 
-    telemetry = []
+        cursor.execute("""
+            SELECT *
+            FROM telemetry
+            ORDER BY id DESC
+        """)
 
-    for row in rows:
+        rows = cursor.fetchall()
 
-        telemetry.append({
-            "bus_id": row[0],
-            "timestamp": row[1],
-            "lat": row[2],
-            "lon": row[3],
-            "speed_kmh": row[4],
-            "occupancy": row[5]
-        })
+        conn.close()
 
-    return telemetry
+        return [dict(row) for row in rows]
+
+    except Exception as e:
+        return {"error": str(e)}

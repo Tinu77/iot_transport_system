@@ -1,174 +1,199 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
+import plotly.express as px
+import plotly.graph_objects as go
+from streamlit_autorefresh import st_autorefresh
 
-# =========================================
-# PAGE CONFIGURATION
-# =========================================
-
-
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="IoT Transport Dashboard",
+    page_title="IoT Public Transport Monitoring System",
+    page_icon="🚌",
     layout="wide"
 )
 
-# =========================================
-# PAGE TITLE
-# =========================================
+# Auto refresh every 5 seconds
+st_autorefresh(interval=5000, key="refresh")
 
+# ---------------- TITLE ----------------
 st.title("🚌 IoT Public Transport Monitoring System")
+st.markdown("### Real-Time Monitoring and Management Dashboard")
 
-st.markdown(
-    "### Real-Time Monitoring and Management Dashboard"
-)
+# ---------------- API CONFIG ----------------
+API_URL = "http://127.0.0.1:8000/telemetry"
 
-# =========================================
-# AUTO REFRESH CONTAINER
-# =========================================
+# ---------------- FETCH DATA ----------------
+try:
+    response = requests.get(API_URL)
 
-placeholder = st.empty()
-
-# =========================================
-# LIVE DASHBOARD LOOP
-# =========================================
-
-while True:
-
-    try:
-
-        # =========================================
-        # FETCH TELEMETRY DATA FROM API
-        # =========================================
-
-        response = requests.get(
-            "http://127.0.0.1:8000/telemetry"
-        )
-
+    if response.status_code == 200:
         data = response.json()
 
+        if len(data) == 0:
+            st.warning("No telemetry data received yet.")
+            st.stop()
+
+        # Convert to DataFrame
         df = pd.DataFrame(data)
 
-        with placeholder.container():
+        # ---------------- CLEAN DATA ----------------
+        numeric_columns = ["lat", "lon", "speed_kmh", "occupancy"]
 
-            # =========================================
-            # LIVE TELEMETRY TABLE
-            # =========================================
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            st.subheader("📡 Live Telemetry Data")
+        # Convert timestamp
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-            st.dataframe(
+        # ---------------- METRICS ----------------
+        st.subheader("📊 System Metrics")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        total_records = len(df)
+
+        avg_speed = (
+            round(df["speed_kmh"].mean(), 2)
+            if "speed_kmh" in df.columns
+            else 0
+        )
+
+        avg_occupancy = (
+            round(df["occupancy"].mean(), 2)
+            if "occupancy" in df.columns
+            else 0
+        )
+
+        active_buses = (
+            df["bus_id"].nunique()
+            if "bus_id" in df.columns
+            else 0
+        )
+
+        with col1:
+            st.metric("Total Records", total_records)
+
+        with col2:
+            st.metric("Average Speed", avg_speed)
+
+        with col3:
+            st.metric("Average Occupancy", avg_occupancy)
+
+        with col4:
+            st.metric("Active Buses", active_buses)
+
+        # ---------------- LIVE TELEMETRY ----------------
+        st.subheader("📡 Live Telemetry Data")
+
+        telemetry_columns = [
+            "timestamp",
+            "trip_id",
+            "bus_id",
+            "stop_id",
+            "lat",
+            "lon",
+            "speed_kmh",
+            "occupancy"
+        ]
+
+        available_columns = [
+            col for col in telemetry_columns if col in df.columns
+        ]
+
+        st.dataframe(
+            df[available_columns],
+            use_container_width=True
+        )
+
+        # ---------------- MAP ----------------
+        if "lat" in df.columns and "lon" in df.columns:
+
+            st.subheader("🗺️ Bus Locations")
+
+            map_df = df[["lat", "lon"]].dropna()
+
+            st.map(map_df)
+
+        # ---------------- SPEED ANALYSIS ----------------
+        if "speed_kmh" in df.columns:
+
+            st.subheader("🚀 Speed Analysis")
+
+            fig_speed = px.line(
                 df,
-                use_container_width=True
+                x="timestamp",
+                y="speed_kmh",
+                color="bus_id" if "bus_id" in df.columns else None,
+                title="Bus Speed Over Time"
             )
 
-            # =========================================
-            # KPI METRICS
-            # =========================================
+            st.plotly_chart(fig_speed, use_container_width=True)
 
-            st.subheader("📊 System Metrics")
+        # ---------------- OCCUPANCY ANALYSIS ----------------
+        if "occupancy" in df.columns:
 
-            col1, col2, col3, col4 = st.columns(4)
+            st.subheader("👥 Occupancy Analysis")
 
-            col1.metric(
-                "Total Records",
-                len(df)
+            fig_occ = px.bar(
+                df,
+                x=df.index,
+                y="occupancy",
+                color="bus_id" if "bus_id" in df.columns else None,
+                title="Passenger Occupancy"
             )
 
-            col2.metric(
-                "Average Speed",
-                round(df["speed_kmh"].mean(), 2)
-            )
+            st.plotly_chart(fig_occ, use_container_width=True)
 
-            col3.metric(
-                "Average Occupancy",
-                round(df["occupancy"].mean(), 2)
-            )
+        # ---------------- OVERCROWDED BUSES ----------------
+        if "occupancy" in df.columns:
 
-            col4.metric(
-                "Active Buses",
-                df["bus_id"].nunique()
-            )
-
-            # =========================================
-            # OVERCROWDED BUSES
-            # =========================================
+            overcrowded = df[df["occupancy"] > 40]
 
             st.subheader("🚨 Overcrowded Buses")
 
-            crowded = df[df["occupancy"] > 40]
-
-            if len(crowded) > 0:
+            if len(overcrowded) > 0:
 
                 st.dataframe(
-                    crowded,
+                    overcrowded[available_columns],
                     use_container_width=True
                 )
 
             else:
+                st.success("No overcrowded buses detected.")
 
-                st.success(
-                    "No overcrowded buses detected."
-                )
+        # ---------------- RECENT BUS STATUS ----------------
+        if "bus_id" in df.columns:
 
-            # =========================================
-            # OCCUPANCY ANALYSIS
-            # =========================================
+            st.subheader("🚌 Latest Bus Status")
 
-            st.subheader("👥 Occupancy Analysis")
-
-            st.bar_chart(df["occupancy"])
-
-            # =========================================
-            # SPEED ANALYSIS
-            # =========================================
-
-            st.subheader("🚍 Speed Analysis")
-
-            st.line_chart(df["speed_kmh"])
-
-            # =========================================
-            # SPEED DISTRIBUTION
-            # =========================================
-
-            st.subheader("📈 Speed Distribution")
-
-            st.area_chart(df["speed_kmh"])
-
-            # =========================================
-            # TRIPS PER BUS
-            # =========================================
-
-            st.subheader("🛣 Trips Per Bus")
-
-            trip_counts = df["bus_id"].value_counts()
-
-            st.bar_chart(trip_counts)
-
-            # =========================================
-            # LIVE GPS MAP
-            # =========================================
-
-            st.subheader("🗺 Live Bus Locations")
-
-            map_df = df[["lat", "lon"]]
-
-            st.map(map_df)
-
-            # =========================================
-            # LAST UPDATE TIME
-            # =========================================
-
-            st.caption(
-                "Dashboard auto-refreshes every 5 seconds."
+            latest_status = (
+                df.sort_values("timestamp")
+                .groupby("bus_id")
+                .tail(1)
             )
 
-    except Exception as e:
+            status_columns = [
+                "bus_id",
+                "trip_id",
+                "timestamp",
+                "speed_kmh",
+                "occupancy",
+                "stop_id"
+            ]
 
-        st.error(f"Error loading dashboard: {e}")
+            status_columns = [
+                col for col in status_columns if col in latest_status.columns
+            ]
 
-    # =========================================
-    # REFRESH EVERY 5 SECONDS
-    # =========================================
+            st.dataframe(
+                latest_status[status_columns],
+                use_container_width=True
+            )
 
-    time.sleep(5)
+    else:
+        st.error(f"Failed to fetch data. Status code: {response.status_code}")
+
+except Exception as e:
+    st.error(f"Error loading dashboard: {e}")
