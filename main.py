@@ -7,6 +7,29 @@ import ssl
 
 app = FastAPI()
 
+import sqlite3
+
+# Create database and telemetry table
+conn = sqlite3.connect("transport.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS telemetry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bus_id TEXT,
+    trip_id TEXT,
+    stop_id TEXT,
+    timestamp TEXT,
+    lat REAL,
+    lon REAL,
+    speed_kmh REAL,
+    occupancy INTEGER
+)
+""")
+
+conn.commit()
+conn.close()
+
 # =========================
 # MQTT CONFIGURATION
 # =========================
