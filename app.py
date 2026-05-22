@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import plotly.express as px
 import plotly.graph_objects as go
-from streamlit_autorefresh import st_autorefresh
+
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
