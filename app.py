@@ -20,7 +20,7 @@ st.title("🚌 IoT Public Transport Monitoring System")
 st.markdown("### Real-Time Monitoring and Management Dashboard")
 
 # ---------------- API CONFIG ----------------
-API_URL = "http://127.0.0.1:8000/telemetry"
+API_URL = "https://iot-transport-system-1.onrender.com/telemetry"
 
 # ---------------- FETCH DATA ----------------
 try:
