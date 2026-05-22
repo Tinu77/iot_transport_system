@@ -35,7 +35,7 @@ conn.close()
 # =========================
 
 BROKER = "5bedf517a53645328ea3e3a30e67f571.s1.eu.hivemq.cloud"
-PORT = 8883
+MQTT_PORT = 8883
 USERNAME = "ADMIN"
 PASSWORD = "AdminBus123"
 TOPIC = "transport/bus"
@@ -98,7 +98,7 @@ client.on_message = on_message
 
 print("Connecting to HiveMQ Cloud...")
 
-client.connect(BROKER, PORT, 60)
+client.connect(BROKER, MQTT_PORT, 60)
 
 client.loop_start()
 
@@ -136,3 +136,11 @@ def get_telemetry():
 
     except Exception as e:
         return {"error": str(e)}
+
+        if __name__ == "__main__":
+    import uvicorn
+    import os
+
+    port = int(os.environ.get("PORT", 10000))
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
