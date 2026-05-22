@@ -137,7 +137,7 @@ def get_telemetry():
     except Exception as e:
         return {"error": str(e)}
 
-        if __name__ == "__main__":
+      if __name__ == "__main__":
     import uvicorn
     import os
 
