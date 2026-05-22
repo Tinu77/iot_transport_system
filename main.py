@@ -61,7 +61,6 @@ def on_connect(client, userdata, flags, rc):
     else:
         print("Connection failed")
 
-
 def on_message(client, userdata, msg):
     global telemetry_data
 
@@ -77,6 +76,38 @@ def on_message(client, userdata, msg):
 
         # Keep latest 100 records only
         telemetry_data = telemetry_data[-100:]
+
+        # Save to SQLite database
+        conn = sqlite3.connect("transport.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO telemetry (
+                bus_id,
+                trip_id,
+                stop_id,
+                timestamp,
+                lat,
+                lon,
+                speed_kmh,
+                occupancy
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("bus_id"),
+            data.get("trip_id"),
+            data.get("stop_id"),
+            data.get("timestamp"),
+            data.get("lat"),
+            data.get("lon"),
+            data.get("speed_kmh"),
+            data.get("occupancy")
+        ))
+
+        conn.commit()
+        conn.close()
+
+        print("Telemetry saved to database")
 
     except Exception as e:
         print("Error processing message:", e)
