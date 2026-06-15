@@ -5,6 +5,8 @@ import sqlite3
 import ssl
 
 
+
+
 app = FastAPI()
 
 import sqlite3
@@ -133,6 +135,8 @@ client.connect(BROKER, MQTT_PORT, 60)
 
 client.loop_start()
 
+
+
 # =========================
 # FASTAPI ROUTES
 # =========================
@@ -167,6 +171,9 @@ def get_telemetry():
 
     except Exception as e:
         return {"error": str(e)}
+
+
+
 
 
 if __name__ == "__main__":

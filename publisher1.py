@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import time
 import ssl
-import random
 import paho.mqtt.client as mqtt
 
 # =========================
@@ -45,6 +44,7 @@ def on_connect(client, userdata, flags, rc):
 def on_disconnect(client, userdata, rc):
     print("\nDisconnected with result code:", rc)
 
+
 # =========================
 # CREATE MQTT CLIENT
 # =========================
@@ -53,7 +53,9 @@ client = mqtt.Client()
 
 client.username_pw_set(USERNAME, PASSWORD)
 
+# Required for HiveMQ Cloud
 client.tls_set(cert_reqs=ssl.CERT_NONE)
+
 client.tls_insecure_set(True)
 
 client.on_connect = on_connect
@@ -67,6 +69,7 @@ print("\n========== MQTT CONFIG ==========")
 print("BROKER:", BROKER)
 print("PORT:", PORT)
 print("USERNAME:", USERNAME)
+print("PASSWORD:", PASSWORD)
 print("TOPIC:", TOPIC)
 print("=================================\n")
 
@@ -79,66 +82,33 @@ client.loop_start()
 time.sleep(3)
 
 # =========================
-# BUS FLEET
+# PUBLISH DATA
 # =========================
 
-buses = [
-    "BUS001",
-    "BUS002",
-    "BUS003",
-    "BUS004",
-    "BUS005",
-    "BUS006",
-    "BUS007",
-    "BUS008",
-    "BUS009",
-    "BUS010"
-]
+for _, row in df.iterrows():
 
-# =========================
-# CONTINUOUS PUBLISHING
-# =========================
+    payload = {
+        "bus_id": str(row["bus_id"]),
+        "timestamp": str(row["timestamp"]),
+        "lat": float(row["lat"]),
+        "lon": float(row["lon"]),
+        "speed_kmh": float(row["speed_kmh"]),
+        "occupancy": int(row["occupancy"])
+    }
 
-print("\nStarting Fleet Simulation...\n")
+    result = client.publish(TOPIC, json.dumps(payload))
 
-while True:
+    print("\nPublished:", payload)
 
-    for _, row in df.iterrows():
+    print("MQTT Result Code:", result.rc)
 
-        for i, bus in enumerate(buses):
+    if result.rc == 0:
+        print("Message sent successfully")
 
-            payload = {
-                "bus_id": bus,
-                "trip_id": f"TRIP_{bus}",
-                "timestamp": str(row["timestamp"]),
+    else:
+        print("Failed to send message")
 
-                # Slightly different location for each bus
-                "lat": float(row["lat"]) + (i * 0.005),
-                "lon": float(row["lon"]) + (i * 0.005),
+    time.sleep(2)
 
-                # Slight speed variation
-                "speed_kmh": round(
-                    float(row["speed_kmh"]) +
-                    random.uniform(-5, 5),
-                    2
-                ),
-
-                # Random occupancy
-                "occupancy": random.randint(5, 50)
-            }
-
-            result = client.publish(
-                TOPIC,
-                json.dumps(payload)
-            )
-
-            print("Published:", payload)
-
-            if result.rc == 0:
-                print("Message sent successfully")
-            else:
-                print("Failed to send message")
-
-            time.sleep(0.5)
-
-    print("\nCompleted Route - Restarting...\n")
+client.loop_stop()
+client.disconnect()
