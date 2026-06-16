@@ -1,13 +1,14 @@
-import pandas as pd
 import json
-import time
 import ssl
+import time
 import random
+from datetime import datetime
+
 import paho.mqtt.client as mqtt
 
-# =========================
-# MQTT CONFIGURATION
-# =========================
+# =====================================================
+# HIVEMQ CLOUD CONFIGURATION
+# =====================================================
 
 BROKER = "5bedf517a53645328ea3e3a30e67f571.s1.eu.hivemq.cloud"
 PORT = 8883
@@ -16,129 +17,172 @@ TOPIC = "transport/bus"
 USERNAME = "ADMIN"
 PASSWORD = "AdminBus123"
 
-# =========================
-# LOAD CSV
-# =========================
+# =====================================================
+# ROUTE A
+# =====================================================
 
-df = pd.read_csv("transport_data.csv")
+ROUTE_A = [
+    {"stop_id": "KUTO", "lat": 7.1557, "lon": 3.3451},
+    {"stop_id": "PANSEKE", "lat": 7.1650, "lon": 3.3500},
+    {"stop_id": "CAMP", "lat": 7.1750, "lon": 3.3600},
+    {"stop_id": "ADATAN", "lat": 7.1850, "lon": 3.3700},
+    {"stop_id": "LAFENWA", "lat": 7.1950, "lon": 3.3800}
+]
 
-print("CSV Loaded Successfully")
-print(df.head())
+# =====================================================
+# ROUTE B
+# =====================================================
 
-# =========================
+ROUTE_B = [
+    {"stop_id": "ITA_EKO", "lat": 7.1580, "lon": 3.3470},
+    {"stop_id": "OMIDA", "lat": 7.1605, "lon": 3.3485},
+    {"stop_id": "IJAYE", "lat": 7.1680, "lon": 3.3550},
+    {"stop_id": "OKE_ILEWO", "lat": 7.1780, "lon": 3.3650},
+    {"stop_id": "TOTORO", "lat": 7.1900, "lon": 3.3750}
+]
+
+# =====================================================
+# BUS FLEET
+# =====================================================
+
+BUSES = {
+    "BUS001": ROUTE_A,
+    "BUS002": ROUTE_A,
+    "BUS003": ROUTE_A,
+    "BUS004": ROUTE_A,
+    "BUS005": ROUTE_A,
+    "BUS006": ROUTE_B,
+    "BUS007": ROUTE_B,
+    "BUS008": ROUTE_B,
+    "BUS009": ROUTE_B,
+    "BUS010": ROUTE_B
+}
+
+# =====================================================
+# TRACK BUS POSITIONS
+# =====================================================
+
+bus_positions = {}
+
+for i, bus in enumerate(BUSES.keys()):
+    bus_positions[bus] = i % 5
+
+# =====================================================
 # MQTT CALLBACKS
-# =========================
+# =====================================================
 
 def on_connect(client, userdata, flags, rc):
-    print("\nMQTT CONNECTION RESULT:", rc)
-
     if rc == 0:
-        print("Successfully connected to HiveMQ Cloud")
-
-    elif rc == 5:
-        print("Authentication failed - check username/password")
-
+        print("✅ Connected to HiveMQ Cloud")
     else:
-        print("Connection failed")
-
+        print(f"❌ Connection failed. RC={rc}")
 
 def on_disconnect(client, userdata, rc):
-    print("\nDisconnected with result code:", rc)
+    print(f"⚠️ Disconnected. RC={rc}")
 
-# =========================
-# CREATE MQTT CLIENT
-# =========================
+# =====================================================
+# MQTT CLIENT
+# =====================================================
+client = mqtt.Client(protocol=mqtt.MQTTv311)
 
-client = mqtt.Client()
 
-client.username_pw_set(USERNAME, PASSWORD)
+client.username_pw_set(
+    USERNAME,
+    PASSWORD
+)
 
-client.tls_set(cert_reqs=ssl.CERT_NONE)
+client.tls_set(
+    cert_reqs=ssl.CERT_NONE
+)
+
 client.tls_insecure_set(True)
 
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 
-# =========================
+# =====================================================
 # CONNECT
-# =========================
+# =====================================================
 
-print("\n========== MQTT CONFIG ==========")
-print("BROKER:", BROKER)
-print("PORT:", PORT)
-print("USERNAME:", USERNAME)
-print("TOPIC:", TOPIC)
-print("=================================\n")
+try:
 
-print("Connecting to HiveMQ Cloud...")
+    print("Connecting to HiveMQ Cloud...")
 
-client.connect(BROKER, PORT, 60)
+    client.connect(
+        BROKER,
+        PORT,
+        60
+    )
 
-client.loop_start()
+    client.loop_start()
 
-time.sleep(3)
+    time.sleep(2)
 
-# =========================
-# BUS FLEET
-# =========================
+except Exception as e:
 
-buses = [
-    "BUS001",
-    "BUS002",
-    "BUS003",
-    "BUS004",
-    "BUS005",
-    "BUS006",
-    "BUS007",
-    "BUS008",
-    "BUS009",
-    "BUS010"
-]
+    print("Connection Error:", e)
+    raise SystemExit
 
-# =========================
-# CONTINUOUS PUBLISHING
-# =========================
+# =====================================================
+# START SIMULATION
+# =====================================================
 
-print("\nStarting Fleet Simulation...\n")
+print("\n🚌 Starting Abeokuta Smart Transport Simulation\n")
 
 while True:
 
-    for _, row in df.iterrows():
+    for bus, route in BUSES.items():
 
-        for i, bus in enumerate(buses):
+        position = bus_positions[bus]
 
-            payload = {
-                "bus_id": bus,
-                "trip_id": f"TRIP_{bus}",
-                "timestamp": str(row["timestamp"]),
+        stop = route[position]
 
-                # Slightly different location for each bus
-                "lat": float(row["lat"]) + (i * 0.005),
-                "lon": float(row["lon"]) + (i * 0.005),
+        payload = {
+            "bus_id": bus,
+            "trip_id": f"{bus}_{datetime.now().strftime('%Y%m%d_%H%M')}",
+            "stop_id": stop["stop_id"],
+            "timestamp": datetime.now().isoformat(),
+            "lat": round(
+                stop["lat"] + random.uniform(-0.0010, 0.0010),
+                6
+            ),
+            "lon": round(
+                stop["lon"] + random.uniform(-0.0010, 0.0010),
+                6
+            ),
+            "speed_kmh": round(
+                random.uniform(20, 60),
+                2
+            ),
+            "occupancy": random.randint(5, 50)
+        }
 
-                # Slight speed variation
-                "speed_kmh": round(
-                    float(row["speed_kmh"]) +
-                    random.uniform(-5, 5),
-                    2
-                ),
+        result = client.publish(
+            TOPIC,
+            json.dumps(payload),
+            qos=1
+        )
 
-                # Random occupancy
-                "occupancy": random.randint(5, 50)
-            }
+        if result.rc == 0:
 
-            result = client.publish(
-                TOPIC,
-                json.dumps(payload)
+            print(
+                f"{bus} | "
+                f"{stop['stop_id']} | "
+                f"Speed={payload['speed_kmh']} km/h | "
+                f"Passengers={payload['occupancy']}"
             )
 
-            print("Published:", payload)
+        else:
 
-            if result.rc == 0:
-                print("Message sent successfully")
-            else:
-                print("Failed to send message")
+            print(f"❌ Publish failed for {bus}")
 
-            time.sleep(0.5)
+        # Move to next stop
+        bus_positions[bus] = (
+            bus_positions[bus] + 1
+        ) % len(route)
 
-    print("\nCompleted Route - Restarting...\n")
+        time.sleep(0.5)
+
+    print("\n🔄 Route cycle completed\n")
+
+    time.sleep(3)
